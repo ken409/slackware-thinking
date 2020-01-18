@@ -1,0 +1,44 @@
+sqg -p qemu libvirt virt-manager
+i=$(cat /var/lib/sbopkg/queues/{qemu,libvirt,virt-manager}.sqf)
+slackpkg install $i
+or
+slpkg repo-add ponce http://ponce.cc/slackware/slackware64-current/packages/
+slpkg -s ponce $i
+
+# mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/share
+# mount -t cifs -o username=user //server/share /mnt/smb
+# mount.nfs 192.168.122.1:/home /mnt/nfs (exports lo)
+
+Enable virtio for windows (option) (install only)
+http://www.linux-kvm.org/page/WindowsGuestDrivers/Download_Drivers
+
+Enabling SPICE support on the guest (included virtio)
+https://www.spice-space.org/download.html
+
+tips:
+1. add two disks, sata for system, virtio for driver, then change sata to virtio
+2. change display driver to qxl manual if needed
+3. # vi /etc/samba/samba.conf-sample (xp/2003)
+ min protocol = NT1
+ lanman auth = yes
+ ntlm auth = yes
+    # smbpasswd -a samba_user
+    # /etc/rc.c/rc.samba start
+    change group to MYGROUP
+4. USB 3 --> USB 2
+5. -machine type=q35,accel=kvm - Modern chipset (PCIe, AHCI, ...) 
+6. Disable Fast Startup, Hiberfil.sys, Windows Indexing, Automatic Disk Defragmenting
+    Enable High Performance Power Mode, RDp
+    Enable MSI for Interrupts to Fix HDMI Audio Support
+7.  LVM on top of RAID1 with raw images, still using virtio but setting cache='none' and io='native' on the disk drive. 
+8. QCOW2 format, remember to manually create preallocated virtual disk files and to use a “none” cache policy (you can also use a “write-back” policy). 
+9. shutudown and 'dd' image partition to LVM
+10. For windows 10
+ 10.1 add virtio scsi controller and make sure the scsi disks attached on it. 
+ 10.2 for 4c/2t cpu, model: host-passthrough, sockets='1' cores='4' threads='2'
+ 10.3 leave 2 core to host, check host cpus: $ virsh capabilities | grep topology
+ 10.4 ac97 soundcard, disable driver sign enforcement on boot, press f8 --> f7
+11.  boot from usb: 
+ Add Hardware --> USB Host Device
+ Boot Options  --> USB 
+12. pa passthough server path: $ pactl info
