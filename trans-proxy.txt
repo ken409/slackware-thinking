@@ -1,0 +1,82 @@
+Transparent proxy
+
+1. NAT mode 
+	
+	a. squid (no https)
+		http_port 3128 intercept # [1]
+    
+		iptables -t nat -A PREROUTING -i tun0 -p tcp --dport 80 -j DNAT --to 10.8.0.1:3128
+		iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-port 3128
+
+	b. privoxy (no https)
+		 accept-intercepted-requests 1 # [2]
+
+	c. tor (socks)
+		VirtualAddrNetwork 10.192.0.0/10
+		AutomapHostsOnResolve 1
+		DNSPort 10.8.0.1:53530
+		TransPort 10.8.0.1:9040 #  [3]
+    
+		iptables -A INPUT -i tun1 -s 10.8.0.0/24 -m state --state NEW -j ACCEPT
+		iptables -t nat -A PREROUTING -i tun1 -p udp --dport 53 -s 10.8.0.0/24 -j DNAT --to-destination 10.8.0.1:53530
+		iptables -t nat -A PREROUTING -i tun1 -p tcp -s 10.8.0.0/24 -j DNAT --to-destination 10.8.0.1:9040
+		iptables -t nat -A PREROUTING -i tun1 -p udp -s 10.8.0.0/24 -j DNAT --to-destination 10.8.0.1:9040
+
+	d. redsocks(socks)
+		redsocks {
+    			local_ip = 127.0.0.1;
+    			local_port = 12345;
+    			ip = 127.0.0.1;
+    			port = 8088;
+    			type = socks5;
+    			disclose_src = false; } # [4]
+          
+		iptables -t nat -N REDSOCKS
+		iptables -t nat -A REDSOCKS -d 0.0.0.0/8 -j RETURN
+		iptables -t nat -A REDSOCKS -d 10.0.0.0/8 -j RETURN
+		iptables -t nat -A REDSOCKS -d 127.0.0.0/8 -j RETURN
+		iptables -t nat -A REDSOCKS -d 169.254.0.0/16 -j RETURN
+		iptables -t nat -A REDSOCKS -d 172.16.0.0/12 -j RETURN
+		iptables -t nat -A REDSOCKS -d 192.168.0.0/16 -j RETURN
+		iptables -t nat -A REDSOCKS -d 224.0.0.0/4 -j RETURN
+		iptables -t nat -A REDSOCKS -d 240.0.0.0/4 -j RETURN
+		iptables -t nat -A REDSOCKS -p tcp -j REDIRECT --to-ports 12345
+		#
+		# Redirect all lan
+		iptables -t nat -A PREROUTING -p tcp -j REDSOCKS
+		# Rddirect wan
+		iptables -t nat -A OUTPUT -p tcp -j REDSOCKS 
+
+		# OR
+		sysctl -w net.ipv4.conf.tun1.route_localnet=1 i# unsafe [5]
+		iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination 127.0.0.1:12345
+		iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports 12345 
+
+2. Route mode
+
+	a. tun2socks (globe) # [6] [7]
+		ip tuntap add dev $tun mode tun
+		ip addr add 169.254.1.1/30 dev $tun
+		#route add <IP_of_SSH_server> gw <IP_of_original_gateway> metric 5
+		#<same for DNS>
+		route add default gw 169.2:54.1.2 metric 6
+		badvpn-tun2socks --tundev $tun --netif-ipaddr 169.254.1.2 --netif-netmask 255.255.255.252 --socks-server-addr $socks_server
+
+	b. tun2vpn (vpn only) # [8]
+		ip tuntap add dev $tun mode tun
+		ip addr add 169.254.1.1/30 dev $tun
+		# Add a "default rule" to a non-default routing table 
+		ip route add default dev $tun table $id 
+		# Specify that this table is to be used for anything from the wlan interface
+		ip rule add iif tun1 table $id
+		badvpn-tun2socks --tundev $tun --netif-ipaddr 169.254.1.2 --netif-netmask 255.255.255.252 --socks-server-addr $socks_server
+
+References:
+[1] https://www.cyberciti.biz/tips/linux-setup-transparent-proxy-squid-howto.html
+[2] https://www.privoxy.org/user-manual/config.html#ACCEPT-INTERCEPTED-REQUESTS
+[3] https://gist.github.com/kremalicious/4c333c8c54fced00ab10c0a892a2304d#file-tor-openvpn-sh
+[4] https://crosp.net/blog/administration/install-configure-redsocks-proxy-centos-linux/
+[5] https://unix.stackexchange.com/a/112232
+[6] https://github.com/ambrop72/badvpn/wiki/Tun2socks
+[7] https://unix.stackexchange.com/a/144569
+[8] https://unix.stackexchange.com/a/104066
