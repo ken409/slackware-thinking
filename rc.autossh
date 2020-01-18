@@ -1,0 +1,45 @@
+#!/bin/bash
+
+port=8118
+port1=1337
+target=$(ip route show default | head -n 1 | cut -d" " -f3)
+
+start() {
+#	 tcppm -d -i127.0.0.1 8118 $target $port
+	 socat TCP4-LISTEN:$port,reuseaddr,fork TCP4:$target:$port &
+	 socat TCP4-LISTEN:$port1,reuseaddr,fork,bind=127.0.0.1 TCP4:$target:$port1 &
+	 socat TCP-LISTEN:8080,reuseaddr,fork PROXY:$target:127.0.0.1:8080,proxyport=$port &
+#   /usr/bin/autossh -p $port -M 0 -o "ServerAliveInterval 60" -o "ServerAliveCountMax 3" -fND 1337 $target 
+#    /usr/bin/autossh -M 0 -fNL localhost:1337:localhost:1337 -o TCPKeepAlive=yes -p $port $target
+#    inlets server --port=8118 --token=gPhLopK8BlVr65qsDWijhJjA0Kppdt06
+#    /usr/bin/autossh -M 0 -fNL localhost:8118:localhost:8118 -o TCPKeepAlive=yes -p $port $target
+#   sshfs -o rw,reconnect,compression=no,follow_symlinks,transform_symlinks,ServerAliveInterval=60,ServerAliveCountMax=3,ssh_command='autossh -M 0' $target:/data/data/com.termux/files -p $port /home/lhz/media/Android 
+}
+
+stop() {
+#    killall autossh
+#    killall inlets 
+#     killall tcppm
+     killall socat
+#    fusermount -u /home/lhz/media/Android
+}
+
+restart() {
+    stop
+#    sleep 2
+    start
+}
+
+case $1 in
+'start')
+  start
+  ;;
+'stop')
+  stop
+  ;;
+'restart')
+  restart
+  ;;
+*)
+  echo "Usage $0 {start|stop|restart}"
+esac
